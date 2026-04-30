@@ -31,6 +31,12 @@ function requireAuth(): boolean {
 
 interface ListOptions {
   gender?: string;
+  country?: string;
+  ageGroup?: string;
+  minAge?: string;
+  maxAge?: string;
+  sortBy?: string;
+  order?: string;
   page?: string;
   limit?: string;
 }
@@ -43,6 +49,12 @@ export async function profilesListCommand(opts: ListOptions): Promise<void> {
   try {
     const query: Record<string, string | number | undefined> = {};
     if (opts.gender) query.gender = opts.gender;
+    if (opts.country) query.country = opts.country;
+    if (opts.ageGroup) query.age_group = opts.ageGroup;
+    if (opts.minAge) query.min_age = opts.minAge;
+    if (opts.maxAge) query.max_age = opts.maxAge;
+    if (opts.sortBy) query.sort_by = opts.sortBy;
+    if (opts.order) query.order = opts.order;
     if (opts.page) query.page = opts.page;
     if (opts.limit) query.limit = opts.limit;
 
@@ -55,7 +67,7 @@ export async function profilesListCommand(opts: ListOptions): Promise<void> {
     const profiles = Array.isArray(data) ? data : (raw.data as Profile[]) || [];
     const meta: PaginationMeta | undefined =
       raw.total !== undefined
-        ? { page: Number(query.page || 1), total: raw.total as number }
+        ? { page: Number(raw.page || query.page || 1), total: raw.total as number }
         : undefined;
 
     printProfilesTable(profiles, meta);
@@ -181,7 +193,7 @@ export async function profilesCreateCommand(
     spinner.fail("Failed to create profile");
     if (err instanceof ApiError && err.status === 403) {
       printError(
-        "Permission denied. Only analysts and admins can create profiles.",
+        "Permission denied. Only admins can create profiles.",
       );
     } else {
       printError(err instanceof Error ? err.message : "Unknown error");
@@ -217,7 +229,9 @@ export async function profilesDeleteCommand(id: string): Promise<void> {
 // ── profiles export ───────────────────────────────────────────────────────────
 
 interface ExportOptions {
+  format?: string;
   gender?: string;
+  country?: string;
   output?: string;
 }
 
@@ -239,11 +253,13 @@ export async function profilesExportCommand(
 
   try {
     const query: Record<string, string | number | undefined> = {};
+    query.format = opts.format || "csv";
     if (opts.gender) query.gender = opts.gender;
+    if (opts.country) query.country = opts.country;
 
     const { data: csvContent } = await apiRequest<string>(
       "GET",
-      "/api/profiles/export/csv/",
+      "/api/profiles/export/",
       { query, responseType: "text" },
     );
 
@@ -273,6 +289,12 @@ export function registerProfileCommands(program: Command): void {
     .command("list")
     .description("List all profiles")
     .option("--gender <gender>", "Filter by gender (male|female)")
+    .option("--country <country>", "Filter by country code (for example NG)")
+    .option("--age-group <group>", "Filter by age group")
+    .option("--min-age <n>", "Minimum age")
+    .option("--max-age <n>", "Maximum age")
+    .option("--sort-by <field>", "Sort by age, created_at, or gender_probability")
+    .option("--order <order>", "Sort order (asc|desc)")
     .option("--page <n>", "Page number", "1")
     .option("--limit <n>", "Results per page (max 50)", "10")
     .action(profilesListCommand);
@@ -303,7 +325,9 @@ export function registerProfileCommands(program: Command): void {
   profiles
     .command("export")
     .description("Export all profiles to CSV (admin only)")
+    .option("--format <format>", "Export format", "csv")
     .option("--gender <gender>", "Filter by gender before export")
+    .option("--country <country>", "Filter by country code before export")
     .option(
       "--output <filename>",
       "Output filename (default: profiles_<timestamp>.csv)",

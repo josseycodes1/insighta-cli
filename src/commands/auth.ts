@@ -94,6 +94,7 @@ function htmlPage(title: string, message: string, success: boolean): string {
 function startCallbackServer(
   expectedState: string,
   codeVerifier: string,
+  codeChallenge: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
@@ -178,6 +179,7 @@ function startCallbackServer(
             code,
             redirect_uri: CALLBACK_URL,
             code_verifier: codeVerifier,
+            code_challenge: codeChallenge,
           }),
         });
 
@@ -291,7 +293,7 @@ export async function loginGitHubCommand(): Promise<void> {
 
     // Pass codeVerifier to the local server so it can forward it to Django
     // for server-side PKCE verification
-    await startCallbackServer(state, codeVerifier);
+    await startCallbackServer(state, codeVerifier, codeChallenge);
 
     waitSpinner.succeed("GitHub authentication complete");
 
@@ -391,13 +393,13 @@ export async function logoutCommand(): Promise<void> {
 
   // Best-effort server-side session cleanup
   try {
-    await fetch(`${API_BASE}/api/v1/auth/logout/`, {
+    await fetch(`${API_BASE}/auth/logout`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${creds.access_token}`,
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ refresh_token: creds.refresh_token }),
     });
   } catch {
     // Unreachable backend — still clear local creds
@@ -476,10 +478,10 @@ export async function refreshCommand(): Promise<void> {
   const spinner = ora("Refreshing access token…").start();
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/auth/token/refresh/`, {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh: creds.refresh_token }),
+      body: JSON.stringify({ refresh_token: creds.refresh_token }),
     });
 
     const data = (await res.json()) as Record<string, unknown>;
@@ -494,7 +496,8 @@ export async function refreshCommand(): Promise<void> {
 
     saveCredentials({
       ...creds,
-      access_token: data.access as string,
+      access_token: (data.access_token || data.access) as string,
+      refresh_token: (data.refresh_token || data.refresh || creds.refresh_token) as string,
       saved_at: new Date().toISOString(),
     });
 

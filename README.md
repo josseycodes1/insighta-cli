@@ -1,198 +1,154 @@
 # Insighta Labs+ CLI
 
-A globally installable CLI for the **Insighta Labs+ Profile Intelligence System**. Authenticate with email/password or GitHub OAuth, then query and manage profiles from your terminal.
+Globally installable TypeScript CLI for the Insighta Labs+ Profile Intelligence System. It gives engineers and power users terminal access to the same backend used by the web portal.
 
----
+## Repository Role
+
+This repository is the CLI interface in the three-repository Stage 3 architecture:
+
+- Backend API: stores users, profiles, roles, tokens, and audit logs.
+- Web portal: browser UI for non-technical users.
+- CLI: terminal workflow for authenticated profile search and administration.
 
 ## Installation
 
 ```bash
-# Clone the repo
-git clone <your-cli-repo-url>
-cd insighta-cli
-
-# Install dependencies
 npm install
-
-# Build
 npm run build
-
-# Link globally (makes `insighta` available anywhere)
 npm link
 ```
 
----
+After linking, this command should work from any directory:
+
+```bash
+insighta --help
+```
 
 ## Configuration
 
-By default the CLI talks to `http://localhost:8000`.
-
-Override with an environment variable:
+The CLI reads the backend URL from `INSIGHTA_API_URL`.
 
 ```bash
-export INSIGHTA_API_URL=https://your-backend.onrender.com
+set INSIGHTA_API_URL=http://localhost:8000
 ```
 
-Or pass it inline for a single command:
+Default backend:
 
-```bash
-INSIGHTA_API_URL=https://your-backend.onrender.com insighta profiles list
+```text
+http://localhost:8000
 ```
 
-Credentials are stored at `~/.insighta/credentials.json` with permissions `0600` (owner read/write only).
+Production backend:
 
----
-
-## Authentication
-
-### Email + Password
-
-```bash
-insighta login-email -e analyst@company.com -p yourpassword
+```text
+https://rofile--ntegration-adewumijosephine3516-kodp7ruz.leapcell.dev
 ```
 
-### GitHub OAuth (PKCE)
+## Authentication Flow
 
 ```bash
 insighta login
 ```
 
-Opens your browser to GitHub. After authorizing, the local callback server (port `9876`) captures the redirect, exchanges the code + PKCE verifier with the backend, and saves tokens automatically.
+The login command:
 
-### Other auth commands
+1. Generates a secure OAuth `state`.
+2. Generates a PKCE `code_verifier`.
+3. Derives a `code_challenge`.
+4. Starts a temporary local callback server on port `9876`.
+5. Opens the GitHub OAuth URL in the browser.
+6. Captures the callback.
+7. Validates the returned `state`.
+8. Sends the GitHub code and PKCE data to the backend.
+9. Stores access and refresh tokens locally.
 
-```bash
-insighta whoami       # Show current user + token expiry
-insighta refresh      # Manually refresh the access token
-insighta logout       # Clear credentials from disk
+Credentials are stored at:
+
+```text
+~/.insighta/credentials.json
 ```
-
----
-
-## Profiles
-
-### List profiles
-
-```bash
-insighta profiles list
-insighta profiles list --gender male --page 2 --limit 20
-```
-
-### Get a profile
-
-```bash
-insighta profiles get <id>
-```
-
-### Search (natural language)
-
-```bash
-insighta profiles search "young females from nigeria"
-insighta profiles search "adults" --page 1 --limit 5
-```
-
-### Create a profile
-
-```bash
-insighta profiles create --name "Adeola Okafor"
-```
-
-Fetches demographic data from external APIs automatically.
-
-### Delete a profile *(admin only)*
-
-```bash
-insighta profiles delete <id>
-```
-
-### Export to CSV *(admin only)*
-
-```bash
-insighta profiles export
-insighta profiles export --gender female --output ladies.csv
-```
-
----
 
 ## Token Handling
 
-- **Access token** lifetime: 15 minutes (configured in backend `SIMPLE_JWT`)
-- **Refresh token** lifetime: 7 days
-- The API client automatically detects token expiry (with a 30-second buffer) before each request and silently calls `/api/v1/auth/token/refresh/`
-- If the refresh token is also expired, credentials are cleared and the user is prompted to log in again
+- Access tokens are sent as `Authorization: Bearer <token>`.
+- Profile API calls include `X-API-Version: 1`.
+- Expired access tokens are refreshed automatically when possible.
+- If refresh fails, local credentials are cleared and the user must run `insighta login` again.
 
----
+## Commands
+
+Auth:
+
+```bash
+insighta login
+insighta logout
+insighta whoami
+insighta refresh
+```
+
+Profiles:
+
+```bash
+insighta profiles list
+insighta profiles list --gender male
+insighta profiles list --country NG --age-group adult
+insighta profiles list --min-age 25 --max-age 40
+insighta profiles list --sort-by age --order desc
+insighta profiles list --page 2 --limit 20
+
+insighta profiles get <id>
+insighta profiles search "young males from nigeria"
+insighta profiles create --name "Harriet Tubman"
+insighta profiles export --format csv
+insighta profiles export --format csv --gender male --country NG
+```
 
 ## Role Enforcement
 
-| Command | Required Role |
-|---|---|
-| `profiles list` | analyst or admin |
-| `profiles get` | authenticated |
-| `profiles search` | analyst or admin |
-| `profiles create` | analyst or admin |
-| `profiles delete` | admin only |
-| `profiles export` | admin only |
+The backend is the authority for access control.
 
-The CLI enforces role checks locally for `delete` and `export` before hitting the network. The backend enforces them independently on every request.
+| Role | CLI behavior |
+| --- | --- |
+| `admin` | Can list, get, search, create, delete, and export |
+| `analyst` | Can list, get, and search |
 
----
+The CLI also prevents obvious admin-only actions locally so users get immediate feedback.
 
-## Architecture
+## Natural Language Search
 
-```
-insighta-cli/
-├── src/
-│   ├── index.ts              # Entry point, Commander setup
-│   ├── commands/
-│   │   ├── auth.ts           # login, login-email, logout, whoami, refresh
-│   │   ├── profiles.ts       # list, get, search, create, delete, export
-│   │   └── config.ts         # config show
-│   └── utils/
-│       ├── apiClient.ts      # fetch wrapper, auto token refresh, error parsing
-│       ├── credentials.ts    # ~/.insighta/credentials.json read/write
-│       └── display.ts        # chalk tables, profile formatting
-├── dist/                     # Compiled output
-├── package.json
-└── tsconfig.json
+`profiles search` sends the raw query to the backend. The backend parser maps plain English to filters.
+
+Examples:
+
+```bash
+insighta profiles search "young males from nigeria"
+insighta profiles search "females above 30"
+insighta profiles search "adult males from kenya"
 ```
 
-### GitHub OAuth Flow (PKCE)
+## Development
 
-```
-insighta login
-    │
-    ├─► Generate state + code_verifier + code_challenge (SHA-256)
-    ├─► Start local HTTP server on port 9876
-    ├─► Open browser → /accounts/github/login/?state=...&code_challenge=...
-    │
-    │   [User authorises on GitHub]
-    │
-    ├─► GitHub redirects → localhost:9876/callback?code=...&state=...
-    ├─► Validate state (CSRF check)
-    ├─► Forward code + code_verifier to Django backend /github/callback/
-    ├─► Backend generates JWT, redirects to frontend URL with tokens
-    ├─► CLI intercepts redirect (302), parses tokens from Location header
-    └─► Saves to ~/.insighta/credentials.json (mode 0600)
+```bash
+npm install
+npm run dev -- --help
+npm run lint
+npm test
+npm run build
 ```
 
-### Email Login Flow
+## CI/CD
 
-```
-insighta login-email -e x@y.com -p pass
-    │
-    ├─► POST /api/v1/auth/login/    (sets HTTP-only cookie, returns role)
-    ├─► POST /api/v1/auth/token/    (gets Bearer access + refresh tokens)
-    └─► Saves to ~/.insighta/credentials.json
-```
+GitHub Actions workflow: `.github/workflows/ci.yml`
 
----
+Runs on pull requests and pushes to `main`:
 
-## Natural Language Parsing
+- `npm ci`
+- `npm run lint`
+- `npm test`
+- `npm run build`
 
-The `profiles search` command sends the raw query string to the backend's `/api/v1/profiles/search/?q=` endpoint. The backend `NaturalLanguageParser` extracts filters like gender, age range, and country from the query and applies them to the `Profile` queryset.
+## Engineering Standards
 
-Example queries:
-- `"young males from nigeria"` → gender=male, age_group=teenager/adult, country_id=NG  
-- `"senior females"` → gender=female, age_group=senior  
-- `"adults"` → age_group=adult
+- Use conventional commits, for example `fix(cli): handle token refresh`.
+- Open pull requests before merging to `main`.
+- Keep API URLs in environment variables instead of hardcoding deployment URLs in command logic.

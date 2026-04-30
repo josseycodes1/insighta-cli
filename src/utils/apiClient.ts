@@ -16,10 +16,10 @@ async function refreshAccessToken(): Promise<string | null> {
   if (!creds?.refresh_token) return null;
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/auth/token/refresh/`, {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh: creds.refresh_token }),
+      body: JSON.stringify({ refresh_token: creds.refresh_token }),
     });
 
     if (!res.ok) {
@@ -28,10 +28,13 @@ async function refreshAccessToken(): Promise<string | null> {
       return null;
     }
 
-    const data = (await res.json()) as { access: string };
+    const data = (await res.json()) as { access?: string; access_token?: string; refresh?: string; refresh_token?: string };
+    const access = data.access_token || data.access;
+    const refresh = data.refresh_token || data.refresh || creds.refresh_token;
+    if (!access) return null;
     // Persist the new access token
-    saveCredentials({ ...creds, access_token: data.access, saved_at: new Date().toISOString() });
-    return data.access;
+    saveCredentials({ ...creds, access_token: access, refresh_token: refresh, saved_at: new Date().toISOString() });
+    return access;
   } catch {
     return null;
   }
@@ -82,6 +85,7 @@ export async function apiRequest<T>(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
+    "X-API-Version": "1",
   };
 
   if (requiresAuth) {
