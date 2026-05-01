@@ -1,4 +1,3 @@
-// src/commands/profiles.ts
 import fs from "fs";
 import path from "path";
 import { Command } from "commander";
@@ -16,8 +15,6 @@ import {
   type PaginationMeta,
 } from "../utils/display.js";
 
-// ── Auth guard ────────────────────────────────────────────────────────────────
-
 function requireAuth(): boolean {
   if (!loadCredentials()) {
     printError("Not authenticated. Run `insighta login` first.");
@@ -26,8 +23,6 @@ function requireAuth(): boolean {
   }
   return true;
 }
-
-// ── profiles list ─────────────────────────────────────────────────────────────
 
 interface ListOptions {
   gender?: string;
@@ -67,7 +62,10 @@ export async function profilesListCommand(opts: ListOptions): Promise<void> {
     const profiles = Array.isArray(data) ? data : (raw.data as Profile[]) || [];
     const meta: PaginationMeta | undefined =
       raw.total !== undefined
-        ? { page: Number(raw.page || query.page || 1), total: raw.total as number }
+        ? {
+            page: Number(raw.page || query.page || 1),
+            total: raw.total as number,
+          }
         : undefined;
 
     printProfilesTable(profiles, meta);
@@ -77,8 +75,6 @@ export async function profilesListCommand(opts: ListOptions): Promise<void> {
     process.exitCode = 1;
   }
 }
-
-// ── profiles get <id> ────────────────────────────────────────────────────────
 
 export async function profilesGetCommand(id: string): Promise<void> {
   if (!requireAuth()) return;
@@ -108,8 +104,6 @@ export async function profilesGetCommand(id: string): Promise<void> {
     process.exitCode = 1;
   }
 }
-
-// ── profiles search <query> ───────────────────────────────────────────────────
 
 interface SearchOptions {
   page?: string;
@@ -153,8 +147,6 @@ export async function profilesSearchCommand(
   }
 }
 
-// ── profiles create ───────────────────────────────────────────────────────────
-
 interface CreateOptions {
   name: string;
 }
@@ -192,17 +184,13 @@ export async function profilesCreateCommand(
   } catch (err: unknown) {
     spinner.fail("Failed to create profile");
     if (err instanceof ApiError && err.status === 403) {
-      printError(
-        "Permission denied. Only admins can create profiles.",
-      );
+      printError("Permission denied. Only admins can create profiles.");
     } else {
       printError(err instanceof Error ? err.message : "Unknown error");
     }
     process.exitCode = 1;
   }
 }
-
-// ── profiles delete <id> ──────────────────────────────────────────────────────
 
 export async function profilesDeleteCommand(id: string): Promise<void> {
   if (!requireAuth()) return;
@@ -225,8 +213,6 @@ export async function profilesDeleteCommand(id: string): Promise<void> {
     process.exitCode = 1;
   }
 }
-
-// ── profiles export ───────────────────────────────────────────────────────────
 
 interface ExportOptions {
   format?: string;
@@ -278,8 +264,6 @@ export async function profilesExportCommand(
   }
 }
 
-// ── Register ──────────────────────────────────────────────────────────────────
-
 export function registerProfileCommands(program: Command): void {
   const profiles = program
     .command("profiles")
@@ -293,7 +277,10 @@ export function registerProfileCommands(program: Command): void {
     .option("--age-group <group>", "Filter by age group")
     .option("--min-age <n>", "Minimum age")
     .option("--max-age <n>", "Maximum age")
-    .option("--sort-by <field>", "Sort by age, created_at, or gender_probability")
+    .option(
+      "--sort-by <field>",
+      "Sort by age, created_at, or gender_probability",
+    )
     .option("--order <order>", "Sort order (asc|desc)")
     .option("--page <n>", "Page number", "1")
     .option("--limit <n>", "Results per page (max 50)", "10")

@@ -1,4 +1,3 @@
-// src/utils/apiClient.ts
 import {
   loadCredentials,
   saveCredentials,
@@ -6,10 +5,7 @@ import {
   isTokenExpired,
 } from "./credentials.js";
 
-export const API_BASE =
-  process.env.INSIGHTA_API_URL || "http://localhost:8000";
-
-// ── Token refresh ────────────────────────────────────────────────────────────
+export const API_BASE = process.env.INSIGHTA_API_URL || "http://localhost:8000";
 
 async function refreshAccessToken(): Promise<string | null> {
   const creds = loadCredentials();
@@ -23,24 +19,30 @@ async function refreshAccessToken(): Promise<string | null> {
     });
 
     if (!res.ok) {
-      // Refresh token is dead — force re-login
       clearCredentials();
       return null;
     }
 
-    const data = (await res.json()) as { access?: string; access_token?: string; refresh?: string; refresh_token?: string };
+    const data = (await res.json()) as {
+      access?: string;
+      access_token?: string;
+      refresh?: string;
+      refresh_token?: string;
+    };
     const access = data.access_token || data.access;
     const refresh = data.refresh_token || data.refresh || creds.refresh_token;
     if (!access) return null;
-    // Persist the new access token
-    saveCredentials({ ...creds, access_token: access, refresh_token: refresh, saved_at: new Date().toISOString() });
+    saveCredentials({
+      ...creds,
+      access_token: access,
+      refresh_token: refresh,
+      saved_at: new Date().toISOString(),
+    });
     return access;
   } catch {
     return null;
   }
 }
-
-// ── Core request ─────────────────────────────────────────────────────────────
 
 export interface RequestOptions {
   body?: Record<string, unknown>;
@@ -71,7 +73,6 @@ export async function apiRequest<T>(
 ): Promise<ApiResponse<T>> {
   const { body, query, requiresAuth = true, responseType = "json" } = options;
 
-  // Build URL
   const url = new URL(`${API_BASE}${endpoint}`);
   if (query) {
     for (const [k, v] of Object.entries(query)) {
@@ -81,7 +82,6 @@ export async function apiRequest<T>(
     }
   }
 
-  // Build headers
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -95,7 +95,6 @@ export async function apiRequest<T>(
       throw new ApiError(401, "Not authenticated. Run `insighta login` first.");
     }
 
-    // Auto-refresh if token is expired
     if (isTokenExpired(creds.access_token)) {
       const newToken = await refreshAccessToken();
       if (!newToken) {
@@ -110,7 +109,6 @@ export async function apiRequest<T>(
     headers["Authorization"] = `Bearer ${creds.access_token}`;
   }
 
-  // Execute request
   const res = await fetch(url.toString(), {
     method,
     headers,
@@ -126,16 +124,17 @@ export async function apiRequest<T>(
     return { data: text as unknown as T, raw: {} };
   }
 
-  // Parse JSON
   let json: Record<string, unknown>;
   try {
     json = (await res.json()) as Record<string, unknown>;
   } catch {
-    throw new ApiError(res.status, `Server returned non-JSON (HTTP ${res.status})`);
+    throw new ApiError(
+      res.status,
+      `Server returned non-JSON (HTTP ${res.status})`,
+    );
   }
 
   if (!res.ok) {
-    // Extract the most useful error message from Django/DRF responses
     const msg =
       (json.detail as string) ||
       (json.error as string) ||
@@ -145,7 +144,6 @@ export async function apiRequest<T>(
     throw new ApiError(res.status, msg);
   }
 
-  // Unwrap Django's { status, data, ... } envelope if present
   const payload = (json.data ?? json) as T;
   return { data: payload, raw: json };
 }

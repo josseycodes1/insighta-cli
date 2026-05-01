@@ -1,4 +1,3 @@
-// src/commands/auth.ts
 import http from "http";
 import crypto from "crypto";
 import { Command } from "commander";
@@ -18,16 +17,11 @@ import {
   printAuthTable,
 } from "../utils/display.js";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
 const CALLBACK_PORT = 9876;
 const CALLBACK_PATH = "/callback";
 const CALLBACK_URL = `http://localhost:${CALLBACK_PORT}/callback`;
 
-// The CLI's own GitHub OAuth App (separate from the web app)
 const GITHUB_CLI_CLIENT_ID = "Ov23libepnEZjtjAHTZO";
-
-// ── PKCE helpers ──────────────────────────────────────────────────────────────
 
 function generateState(): string {
   return crypto.randomBytes(16).toString("hex");
@@ -40,8 +34,6 @@ function generateCodeVerifier(): string {
 function generateCodeChallenge(verifier: string): string {
   return crypto.createHash("sha256").update(verifier).digest("base64url");
 }
-
-// ── Browser callback page HTML ────────────────────────────────────────────────
 
 function htmlPage(title: string, message: string, success: boolean): string {
   const color = success ? "#00FF88" : "#f85149";
@@ -86,11 +78,6 @@ function htmlPage(title: string, message: string, success: boolean): string {
 </html>`;
 }
 
-// ── Local callback server ─────────────────────────────────────────────────────
-// Waits for GitHub to redirect back with `code` + `state`, then POSTs
-// the code to the backend's GitHubCLIExchangeView which handles
-// the GitHub token exchange, user creation, and JWT generation.
-
 function startCallbackServer(
   expectedState: string,
   codeVerifier: string,
@@ -108,7 +95,6 @@ function startCallbackServer(
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url || "/", `http://localhost:${CALLBACK_PORT}`);
 
-      // Ignore favicon / other browser requests
       if (url.pathname !== CALLBACK_PATH) {
         res.writeHead(404);
         res.end("Not found");
@@ -131,7 +117,6 @@ function startCallbackServer(
         server.close();
       };
 
-      // ── Error from GitHub ──
       if (error) {
         send(
           200,
@@ -143,7 +128,6 @@ function startCallbackServer(
         return;
       }
 
-      // ── Missing params ──
       if (!code || !state) {
         send(
           400,
@@ -155,7 +139,6 @@ function startCallbackServer(
         return;
       }
 
-      // ── CSRF / state check ──
       if (state !== expectedState) {
         send(
           400,
@@ -167,7 +150,6 @@ function startCallbackServer(
         return;
       }
 
-      // ── POST code to backend GitHubCLIExchangeView ──
       try {
         const backendRes = await fetch(`${API_BASE}/api/v1/auth/github/cli/`, {
           method: "POST",
@@ -202,7 +184,6 @@ function startCallbackServer(
           throw new Error("Backend returned no tokens");
         }
 
-        // Persist credentials
         saveCredentials({
           access_token: access,
           refresh_token: refresh,
@@ -248,8 +229,6 @@ function startCallbackServer(
   });
 }
 
-// ── login (GitHub OAuth) ──────────────────────────────────────────────────────
-
 export async function loginGitHubCommand(): Promise<void> {
   const existing = loadCredentials();
   if (existing) {
@@ -262,19 +241,13 @@ export async function loginGitHubCommand(): Promise<void> {
 
   const state = generateState();
   const codeVerifier = generateCodeVerifier();
-  // codeChallenge is generated and sent to the backend for server-side PKCE
-  // verification. It is NOT sent to GitHub — standard GitHub OAuth Apps do
-  // not support code_verifier in the token exchange (only GitHub Apps do).
-  // Sending code_challenge to GitHub causes invalid_grant on token exchange.
   const codeChallenge = generateCodeChallenge(codeVerifier);
 
-  // Build GitHub OAuth URL — NO code_challenge or code_challenge_method
   const githubAuthUrl = new URL("https://github.com/login/oauth/authorize");
   githubAuthUrl.searchParams.set("client_id", GITHUB_CLI_CLIENT_ID);
   githubAuthUrl.searchParams.set("redirect_uri", CALLBACK_URL);
   githubAuthUrl.searchParams.set("scope", "user:email");
   githubAuthUrl.searchParams.set("state", state);
-  // ✅ PKCE enforced server-side by Django — not advertised to GitHub
 
   console.log(
     chalk.cyan("\n  Opening GitHub in your browser to authenticate…\n"),
@@ -288,11 +261,7 @@ export async function loginGitHubCommand(): Promise<void> {
   const waitSpinner = ora("Waiting for GitHub callback…").start();
 
   try {
-    // Open the GitHub OAuth consent page
     await open(githubAuthUrl.toString());
-
-    // Pass codeVerifier to the local server so it can forward it to Django
-    // for server-side PKCE verification
     await startCallbackServer(state, codeVerifier, codeChallenge);
 
     waitSpinner.succeed("GitHub authentication complete");
@@ -311,8 +280,6 @@ export async function loginGitHubCommand(): Promise<void> {
   }
 }
 
-// ── login-email (password fallback) ──────────────────────────────────────────
-
 export async function loginEmailCommand(
   email: string,
   password: string,
@@ -329,7 +296,6 @@ export async function loginEmailCommand(
   const spinner = ora("Authenticating…").start();
 
   try {
-    // simplejwt token endpoint — returns access + refresh tokens directly
     const tokenRes = await fetch(`${API_BASE}/api/v1/auth/token/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -349,7 +315,6 @@ export async function loginEmailCommand(
     const access = tokenData.access as string;
     const refresh = tokenData.refresh as string;
 
-    // Decode role + email from JWT payload
     let role = "analyst";
     let decodedEmail = email;
     try {
@@ -380,8 +345,6 @@ export async function loginEmailCommand(
   }
 }
 
-// ── logout ────────────────────────────────────────────────────────────────────
-
 export async function logoutCommand(): Promise<void> {
   const creds = loadCredentials();
   if (!creds) {
@@ -390,8 +353,6 @@ export async function logoutCommand(): Promise<void> {
   }
 
   const spinner = ora("Logging out…").start();
-
-  // Best-effort server-side session cleanup
   try {
     await fetch(`${API_BASE}/auth/logout`, {
       method: "POST",
@@ -401,17 +362,13 @@ export async function logoutCommand(): Promise<void> {
       },
       body: JSON.stringify({ refresh_token: creds.refresh_token }),
     });
-  } catch {
-    // Unreachable backend — still clear local creds
-  }
+  } catch {}
 
   clearCredentials();
   spinner.succeed(
     `Logged out. Credentials cleared from ${chalk.dim("~/.insighta/credentials.json")}`,
   );
 }
-
-// ── whoami ────────────────────────────────────────────────────────────────────
 
 export async function whoamiCommand(): Promise<void> {
   const creds = loadCredentials();
@@ -430,7 +387,6 @@ export async function whoamiCommand(): Promise<void> {
     const expiresAt = exp ? new Date(exp * 1000).toLocaleString() : "unknown";
     const isExpired = exp ? Date.now() >= exp * 1000 : true;
 
-    // @ts-ignore
     const Table = (await import("cli-table3")).default;
     const table = new Table({
       style: { border: ["grey"] },
@@ -460,12 +416,9 @@ export async function whoamiCommand(): Promise<void> {
     console.log(table.toString());
     console.log();
   } catch {
-    // Fallback if JWT decode fails
     printAuthTable(creds.email, creds.role);
   }
 }
-
-// ── refresh ───────────────────────────────────────────────────────────────────
 
 export async function refreshCommand(): Promise<void> {
   const creds = loadCredentials();
@@ -497,7 +450,9 @@ export async function refreshCommand(): Promise<void> {
     saveCredentials({
       ...creds,
       access_token: (data.access_token || data.access) as string,
-      refresh_token: (data.refresh_token || data.refresh || creds.refresh_token) as string,
+      refresh_token: (data.refresh_token ||
+        data.refresh ||
+        creds.refresh_token) as string,
       saved_at: new Date().toISOString(),
     });
 
@@ -509,8 +464,6 @@ export async function refreshCommand(): Promise<void> {
     process.exitCode = 1;
   }
 }
-
-// ── Register all auth commands ────────────────────────────────────────────────
 
 export function registerAuthCommands(program: Command): void {
   program

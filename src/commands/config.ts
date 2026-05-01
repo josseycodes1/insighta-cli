@@ -1,10 +1,8 @@
-// src/commands/config.ts
 import { Command } from "commander";
 import chalk from "chalk";
 import { loadCredentials } from "../utils/credentials.js";
 import { API_BASE } from "../utils/apiClient.js";
 import { printInfo } from "../utils/display.js";
-// @ts-ignore
 import Table from "cli-table3";
 
 export async function configShowCommand(): Promise<void> {
@@ -25,9 +23,7 @@ export async function configShowCommand(): Promise<void> {
     ],
     [
       chalk.cyan("Credentials File"),
-      chalk.dim(
-        `${process.env.HOME || "~"}/.insighta/credentials.json`,
-      ),
+      chalk.dim(`${process.env.HOME || "~"}/.insighta/credentials.json`),
     ],
     [
       chalk.cyan("Override API URL"),
@@ -50,7 +46,5 @@ export function registerConfigCommands(program: Command): void {
     .command("show")
     .description("Display current configuration")
     .action(configShowCommand);
-
-  // Allow `insighta config` alone to also show config
   config.action(configShowCommand);
 }

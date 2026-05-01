@@ -1,4 +1,3 @@
-// src/utils/credentials.ts
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -20,7 +19,7 @@ export function saveCredentials(creds: Credentials): void {
   }
   fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(creds, null, 2), {
     encoding: "utf-8",
-    mode: 0o600, // owner read/write only — security best practice
+    mode: 0o600,
   });
 }
 
@@ -42,11 +41,11 @@ export function clearCredentials(): void {
 
 export function isTokenExpired(token: string): boolean {
   try {
-    // JWT is base64url encoded: header.payload.signature
     const payload = token.split(".")[1];
-    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
+    const decoded = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf-8"),
+    );
     if (!decoded.exp) return false;
-    // Give a 30-second buffer before actual expiry
     return Date.now() / 1000 >= decoded.exp - 30;
   } catch {
     return true;

@@ -1,9 +1,5 @@
-// src/utils/display.ts
 import chalk from "chalk";
-// @ts-ignore — cli-table3 types are loose
 import Table from "cli-table3";
-
-// ── Types ────────────────────────────────────────────────────────────────────
 
 export interface Profile {
   id: string | number;
@@ -21,8 +17,6 @@ export interface PaginationMeta {
   total: number;
 }
 
-// ── Print helpers ────────────────────────────────────────────────────────────
-
 export function printSuccess(msg: string): void {
   console.log(chalk.green("✔"), msg);
 }
@@ -38,8 +32,6 @@ export function printInfo(msg: string): void {
 export function printWarning(msg: string): void {
   console.log(chalk.yellow("⚠"), msg);
 }
-
-// ── Profile table ────────────────────────────────────────────────────────────
 
 function genderBadge(gender?: string): string {
   if (!gender) return chalk.dim("—");

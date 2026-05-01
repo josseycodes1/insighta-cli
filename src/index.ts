@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-// src/index.ts
 import { Command } from "commander";
 import chalk from "chalk";
 import { registerAuthCommands } from "./commands/auth.js";
@@ -19,12 +17,10 @@ program
   .version("1.0.0", "-v, --version", "Show version")
   .helpOption("-h, --help", "Show help");
 
-// Register all command groups
 registerAuthCommands(program);
 registerProfileCommands(program);
 registerConfigCommands(program);
 
-// Pretty error handling
 program.exitOverride();
 
 try {
@@ -32,15 +28,18 @@ try {
 } catch (err: unknown) {
   if (err instanceof Error && "code" in err) {
     const code = (err as { code: string }).code;
-    // Commander's own help/version exits — these are fine
+
     if (code === "commander.helpDisplayed" || code === "commander.version") {
       process.exit(0);
     }
     if (code === "commander.unknownCommand") {
-      console.error(chalk.red("✖ Unknown command."), "Run", chalk.cyan("insighta --help"));
+      console.error(
+        chalk.red("✖ Unknown command."),
+        "Run",
+        chalk.cyan("insighta --help"),
+      );
       process.exit(1);
     }
   }
-  // Re-throw unexpected errors
   throw err;
 }
